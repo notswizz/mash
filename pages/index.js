@@ -2,78 +2,41 @@ import Head from "next/head";
 import { useState, useCallback, useRef } from "react";
 
 export default function Home() {
-  const [models, setModels] = useState([{ id: 1, name: "Model A", images: [] }]);
+  const [images, setImages] = useState([]);
   const [prompt, setPrompt] = useState("");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
-  const inputRefs = useRef({});
+  const [dragActive, setDragActive] = useState(false);
+  const inputRef = useRef(null);
 
-  const addModel = () => {
-    const nextLetter = String.fromCharCode(65 + models.length); // A, B, C...
-    setModels(prev => [...prev, { id: Date.now(), name: `Model ${nextLetter}`, images: [] }]);
-  };
-
-  const removeModel = (id) => {
-    if (models.length <= 1) return;
-    setModels(prev => prev.filter(m => m.id !== id));
-  };
-
-  const updateModelName = (id, name) => {
-    setModels(prev => prev.map(m => m.id === id ? { ...m, name } : m));
-  };
-
-  const addImages = useCallback((modelId, files) => {
+  const addImages = useCallback((files) => {
     Array.from(files)
       .filter(f => f.type.startsWith('image/'))
       .forEach(file => {
         const reader = new FileReader();
         reader.onload = (e) => {
-          setModels(prev => prev.map(m => {
-            if (m.id !== modelId) return m;
-            return { ...m, images: [...m.images.slice(-3), { id: Date.now() + Math.random(), data: e.target.result }] };
-          }));
+          setImages(prev => [...prev.slice(-3), { id: Date.now() + Math.random(), data: e.target.result }]);
         };
         reader.readAsDataURL(file);
       });
   }, []);
 
-  const removeImage = (modelId, imageId) => {
-    setModels(prev => prev.map(m => {
-      if (m.id !== modelId) return m;
-      return { ...m, images: m.images.filter(img => img.id !== imageId) };
-    }));
-  };
-
-  const totalImages = models.reduce((sum, m) => sum + m.images.length, 0);
-  const canGenerate = totalImages > 0 && prompt.trim();
+  const removeImage = (id) => setImages(prev => prev.filter(img => img.id !== id));
 
   const generate = async () => {
-    if (!canGenerate) return;
+    if (!images.length || !prompt.trim()) return;
     
     setLoading(true);
     setError(null);
     
     try {
-      // Collect all images and build enhanced prompt with model references
-      const allImages = models.flatMap(m => m.images.map(img => img.data));
-      
-      // Build prompt with model context
-      let enhancedPrompt = prompt;
-      models.forEach((m, i) => {
-        if (m.images.length > 0) {
-          // Add context about which images belong to which model
-          enhancedPrompt = `[${m.name}: reference images ${i * 4 + 1}-${i * 4 + m.images.length}] ` + enhancedPrompt;
-        }
-      });
-
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          referenceImages: allImages,
-          prompt: enhancedPrompt,
-          models: models.map(m => ({ name: m.name, imageCount: m.images.length })),
+          referenceImages: images.map(i => i.data),
+          prompt: prompt.trim(),
         }),
       });
       
@@ -96,12 +59,6 @@ export default function Home() {
     a.click();
   };
 
-  const clearAll = () => {
-    setResult(null);
-    setModels([{ id: 1, name: "Model A", images: [] }]);
-    setPrompt('');
-  };
-
   return (
     <>
       <Head>
@@ -115,94 +72,60 @@ export default function Home() {
       <div className="app">
         <header className="header">
           <h1 className="logo">MASH</h1>
-          <p className="subtitle">Multi-Model AI Photoshoot</p>
+          <p className="subtitle">AI Photoshoot Extender</p>
         </header>
 
         <main className="content">
-          {/* Models Section */}
-          {models.map((model, index) => (
-            <div key={model.id} className="card model-card">
-              <div className="card-header">
-                <input
-                  type="text"
-                  className="model-name-input"
-                  value={model.name}
-                  onChange={(e) => updateModelName(model.id, e.target.value)}
-                  placeholder="Name..."
-                />
-                <div className="model-header-actions">
-                  {model.images.length > 0 && (
-                    <span className="card-count">{model.images.length}/4</span>
-                  )}
-                  {models.length > 1 && (
-                    <button className="remove-model-btn" onClick={() => removeModel(model.id)}>×</button>
-                  )}
-                </div>
-              </div>
-              
-              {model.images.length > 0 && (
-                <div className="images">
-                  {model.images.map(img => (
-                    <div key={img.id} className="image-item">
-                      <img src={img.data} alt="" />
-                      <button className="image-remove" onClick={() => removeImage(model.id, img.id)}>×</button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              <div
-                className="upload"
-                onClick={() => inputRefs.current[model.id]?.click()}
-              >
-                <svg className="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <path d="M12 16V4m0 0l4 4m-4-4l-4 4M4 20h16" />
-                </svg>
-                <span className="upload-text">Add photos</span>
-                <input
-                  ref={el => inputRefs.current[model.id] = el}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => addImages(model.id, e.target.files)}
-                  style={{ display: 'none' }}
-                />
-              </div>
+          {/* Upload Card */}
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">Reference Photos</span>
+              {images.length > 0 && <span className="card-count">{images.length}/4</span>}
             </div>
-          ))}
-
-          {/* Add Model Button */}
-          {models.length < 4 && (
-            <button className="add-model-btn" onClick={addModel}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M12 5v14M5 12h14" />
+            
+            {images.length > 0 && (
+              <div className="images">
+                {images.map(img => (
+                  <div key={img.id} className="image-item">
+                    <img src={img.data} alt="" />
+                    <button className="image-remove" onClick={() => removeImage(img.id)}>×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div
+              className={`upload ${dragActive ? 'active' : ''}`}
+              onClick={() => inputRef.current?.click()}
+              onDrop={(e) => { e.preventDefault(); setDragActive(false); addImages(e.dataTransfer.files); }}
+              onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+              onDragLeave={() => setDragActive(false)}
+            >
+              <svg className="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path d="M12 16V4m0 0l4 4m-4-4l-4 4M4 20h16" />
               </svg>
-              Add Another Model
-            </button>
-          )}
+              <span className="upload-text">Tap to add photos</span>
+              <input
+                ref={inputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => addImages(e.target.files)}
+                style={{ display: 'none' }}
+              />
+            </div>
+          </div>
 
           {/* Prompt */}
           <div className="card">
             <div className="prompt-area">
               <textarea
                 className="prompt-input"
-                placeholder={models.length > 1 
-                  ? `Describe the scene using model names (e.g., "${models[0]?.name} looking at ${models[1]?.name}")...`
-                  : "Describe the new image..."
-                }
+                placeholder="Describe the new image..."
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
-                rows={3}
+                rows={2}
               />
-              {models.length > 1 && (
-                <div className="model-tags">
-                  {models.filter(m => m.images.length > 0).map(m => (
-                    <span key={m.id} className="model-tag" onClick={() => setPrompt(prev => prev + ` ${m.name}`)}>
-                      {m.name}
-                    </span>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
 
@@ -221,7 +144,7 @@ export default function Home() {
           <button
             className="generate-btn"
             onClick={generate}
-            disabled={loading || !canGenerate}
+            disabled={loading || !images.length || !prompt.trim()}
           >
             {loading ? (
               <span className="loading">
@@ -251,7 +174,7 @@ export default function Home() {
                     </svg>
                     Again
                   </button>
-                  <button className="action-btn" onClick={clearAll}>
+                  <button className="action-btn" onClick={() => { setResult(null); setImages([]); setPrompt(''); }}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M18 6L6 18M6 6l12 12" />
                     </svg>
