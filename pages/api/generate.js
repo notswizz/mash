@@ -58,14 +58,56 @@ export default async function handler(req, res) {
       const errorData = await response.text();
       console.log('Seedream 4 error:', errorData);
       
-      // Check for rate limiting
+      // Check for rate limiting - auto retry after wait
       if (response.status === 429) {
         const parsed = JSON.parse(errorData);
-        return res.status(429).json({
-          error: 'Rate limited - please wait and try again',
-          details: `Try again in ${parsed.retry_after || 10} seconds. Add $5+ credit to Replicate to remove limits.`,
-          retryAfter: parsed.retry_after || 10,
+        const waitTime = (parsed.retry_after || 3) + 1;
+        
+        console.log(`Rate limited, waiting ${waitTime}s and retrying...`);
+        await new Promise(resolve => setTimeout(resolve, waitTime * 1000));
+        
+        // Retry the request
+        const retryResponse = await fetch('https://api.replicate.com/v1/models/bytedance/seedream-4/predictions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            input: {
+              image_input: referenceImages,
+              prompt: prompt,
+              size: "2K",
+              width: 2048,
+              height: 2048,
+              max_images: 1,
+              aspect_ratio: "1:1",
+              enhance_prompt: true,
+              sequential_image_generation: "disabled",
+            },
+          }),
         });
+
+        if (!retryResponse.ok) {
+          const retryError = await retryResponse.text();
+          console.log('Retry also failed:', retryError);
+          return res.status(429).json({
+            error: 'Rate limited - add $5+ credit to Replicate',
+            details: 'Free tier has strict limits. Add credit at replicate.com/account/billing',
+          });
+        }
+
+        const retryPrediction = await retryResponse.json();
+        const retryResult = await pollPrediction(retryPrediction, apiKey);
+        
+        if (retryResult.status === 'succeeded') {
+          const outputUrl = Array.isArray(retryResult.output) ? retryResult.output[0] : retryResult.output;
+          return res.status(200).json({
+            success: true,
+            image: outputUrl,
+            model: 'bytedance/seedream-4',
+          });
+        }
       }
 
       return res.status(response.status).json({
