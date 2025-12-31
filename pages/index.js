@@ -4,7 +4,9 @@ import { useState, useCallback, useRef } from "react";
 export default function Home() {
   const [images, setImages] = useState([]);
   const [prompt, setPrompt] = useState("");
+  const [mode, setMode] = useState("image"); // 'image' or 'video'
   const [result, setResult] = useState(null);
+  const [resultType, setResultType] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [dragActive, setDragActive] = useState(false);
@@ -37,13 +39,15 @@ export default function Home() {
         body: JSON.stringify({
           referenceImages: images.map(i => i.data),
           prompt: prompt.trim(),
+          mode: mode,
         }),
       });
       
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed');
       
-      setResult(data.image);
+      setResult(data.output);
+      setResultType(data.type);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -55,7 +59,7 @@ export default function Home() {
     if (!result) return;
     const a = document.createElement('a');
     a.href = result;
-    a.download = `mash-${Date.now()}.png`;
+    a.download = `mash-${Date.now()}.${resultType === 'video' ? 'mp4' : 'png'}`;
     a.click();
   };
 
@@ -76,6 +80,30 @@ export default function Home() {
         </header>
 
         <main className="content">
+          {/* Mode Toggle */}
+          <div className="mode-toggle">
+            <button 
+              className={`mode-btn ${mode === 'image' ? 'active' : ''}`}
+              onClick={() => setMode('image')}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="18" height="18" rx="2" />
+                <circle cx="8.5" cy="8.5" r="1.5" />
+                <path d="M21 15l-5-5L5 21" />
+              </svg>
+              Image
+            </button>
+            <button 
+              className={`mode-btn ${mode === 'video' ? 'active' : ''}`}
+              onClick={() => setMode('video')}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              Video
+            </button>
+          </div>
+
           {/* Upload Card */}
           <div className="card">
             <div className="card-header">
@@ -121,7 +149,10 @@ export default function Home() {
             <div className="prompt-area">
               <textarea
                 className="prompt-input"
-                placeholder="Describe the new image..."
+                placeholder={mode === 'video' 
+                  ? "Describe the motion or action..." 
+                  : "Describe the new image..."
+                }
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 rows={2}
@@ -149,10 +180,10 @@ export default function Home() {
             {loading ? (
               <span className="loading">
                 <span className="spinner" />
-                Generating...
+                {mode === 'video' ? 'Creating video...' : 'Generating...'}
               </span>
             ) : (
-              'Generate'
+              mode === 'video' ? 'Create Video' : 'Generate'
             )}
           </button>
 
@@ -160,7 +191,19 @@ export default function Home() {
           <div className="output">
             {result ? (
               <>
-                <img className="output-image" src={result} alt="Generated" />
+                {resultType === 'video' ? (
+                  <video 
+                    className="output-video" 
+                    src={result} 
+                    controls 
+                    autoPlay 
+                    loop 
+                    muted
+                    playsInline
+                  />
+                ) : (
+                  <img className="output-image" src={result} alt="Generated" />
+                )}
                 <div className="output-actions">
                   <button className="action-btn" onClick={download}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -174,7 +217,7 @@ export default function Home() {
                     </svg>
                     Again
                   </button>
-                  <button className="action-btn" onClick={() => { setResult(null); setImages([]); setPrompt(''); }}>
+                  <button className="action-btn" onClick={() => { setResult(null); setResultType(null); setImages([]); setPrompt(''); }}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M18 6L6 18M6 6l12 12" />
                     </svg>
@@ -184,12 +227,18 @@ export default function Home() {
               </>
             ) : (
               <div className="output-empty">
-                <svg className="output-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <circle cx="8.5" cy="8.5" r="1.5" />
-                  <path d="M21 15l-5-5L5 21" />
-                </svg>
-                <p>Your image will appear here</p>
+                {mode === 'video' ? (
+                  <svg className="output-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                  </svg>
+                ) : (
+                  <svg className="output-empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <circle cx="8.5" cy="8.5" r="1.5" />
+                    <path d="M21 15l-5-5L5 21" />
+                  </svg>
+                )}
+                <p>Your {mode} will appear here</p>
               </div>
             )}
           </div>

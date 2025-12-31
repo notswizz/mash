@@ -111,6 +111,48 @@ body::before {
   font-weight: 500;
 }
 
+/* Mode toggle */
+.mode-toggle {
+  display: flex;
+  gap: 0.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.375rem;
+}
+
+.mode-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1rem;
+  background: none;
+  border: none;
+  border-radius: 10px;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.mode-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.mode-btn:hover {
+  color: var(--text);
+}
+
+.mode-btn.active {
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: white;
+}
+
 
 /* Upload area */
 .upload {
@@ -294,11 +336,19 @@ body::before {
   font-size: 0.85rem;
 }
 
-.output-image {
+.output-image,
+.output-video {
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
   display: block;
+  background: var(--surface-2);
+}
+
+.output-video {
+  aspect-ratio: auto;
+  max-height: 500px;
+  object-fit: contain;
 }
 
 .output-actions {
